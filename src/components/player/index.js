@@ -15,7 +15,7 @@ export { EQPanel, EQBar }    from './panels/EQPanel';
 export { default as QueuePanel }   from './panels/QueuePanel';
 export { default as InfosPanel }   from './panels/InfosPanel';
 export { default as CommentsPanel } from './panels/CommentsPanel';
-// export { default as PlayerView }   from './panels/PlayerView';
+export { default as PlayerView }   from './panels/PlayerView';
 
 // Modals
 export { default as ShareModal } from './modals/ShareModal';
