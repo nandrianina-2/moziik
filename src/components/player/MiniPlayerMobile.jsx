@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Pause, SkipForward, Heart, ChevronUp, Download, Check } from 'lucide-react';
-import "./fullplayer.css"
+// import "./fullplayer.css";
 
 const MiniPlayerMobile = ({
   currentSong,
