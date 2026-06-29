@@ -1211,23 +1211,144 @@ const AppInner = () => {
       )}
 
       {/* ════════ PLAYER BAR DESKTOP ════════ */}
+{currentSong && (
+  <footer className="hidden sm:block fixed bottom-0 left-0 right-0 bg-zinc-950/98 border-t border-zinc-800/60 backdrop-blur-xl z-40">
+
+    <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-0.5 opacity-70 pointer-events-none" width="1000" height="4"/>
+
+    {/* ── Ligne unique : info | contrôles+barre | actions ── */}
+    <div className="flex items-center gap-3 px-4 h-16 sm:h-[72px]">
+
+      {/* LEFT — Pochette + titre */}
+      <button
+        onClick={() => navigate('/player')}
+        className="flex items-center gap-3 min-w-0 w-[220px] shrink-0 hover:opacity-80 transition text-left"
+      >
+        <div className="relative shrink-0">
+          <img src={currentSong.image} className="w-10 h-10 rounded-xl object-cover shadow-lg" alt=""/>
+          {isPlaying && <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full border-2 border-zinc-950 animate-pulse"/>}
+        </div>
+        <div className="min-w-0">
+          <div className="text-xs font-bold truncate text-zinc-200">{currentSong.titre}</div>
+          <div className="text-[10px] text-zinc-500 truncate">{currentSong.artiste}</div>
+        </div>
+      </button>
+
+      {/* CENTER — Boutons + barre sur une seule colonne, flex-1 */}
+      <div className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+
+        {/* Boutons */}
+        <div className="flex items-center gap-3 sm:gap-5">
+          <Shuffle
+            onClick={() => setIsShuffle(!isShuffle)}
+            size={14}
+            className={`cursor-pointer transition hidden sm:block ${isShuffle ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}
+          />
+          <SkipBack onClick={handlePrev} size={18} className="text-zinc-400 cursor-pointer hover:text-white transition"/>
+          <button
+            onClick={() => { initAudioEngine(); setIsPlaying(p => !p); }}
+            className="w-9 h-9 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition shadow-lg shrink-0"
+          >
+            {isPlaying ? <Pause fill="white" size={15}/> : <Play fill="white" size={15}/>}
+          </button>
+          <SkipForward onClick={handleNext} size={18} className="text-zinc-400 cursor-pointer hover:text-white transition"/>
+          <button
+            onClick={() => setRepeatMode(m => (m+1)%3)}
+            className={`cursor-pointer transition hidden sm:block ${repeatMode > 0 ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}
+          >
+            {repeatMode === 2 ? <Repeat1 size={14}/> : <Repeat size={14}/>}
+          </button>
+        </div>
+
+        {/* Barre de progression + temps */}
+        <div className="w-full flex items-center gap-2">
+          <span className="text-[10px] text-zinc-500 w-7 text-right shrink-0 tabular-nums">{formatTime(currentTime)}</span>
+          <div
+            className="flex-1 h-1 bg-zinc-700 rounded-full cursor-pointer relative group"
+            onClick={e => {
+              const r = e.currentTarget.getBoundingClientRect();
+              if (audioRef.current) audioRef.current.currentTime = ((e.clientX - r.left) / r.width) * duration;
+            }}
+          >
+            <div
+              className="h-full bg-red-500 rounded-full transition-all duration-100"
+              style={{ width: `${(currentTime / duration) * 100 || 0}%` }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition pointer-events-none"
+              style={{ left: `${(currentTime / duration) * 100 || 0}%` }}
+            />
+          </div>
+          <span className="text-[10px] text-zinc-500 w-7 shrink-0 tabular-nums">{formatTime(duration)}</span>
+        </div>
+
+      </div>
+
+      {/* RIGHT — Actions */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {listeners.length > 0 && (
+          <div className="hidden lg:block">
+            <ListenersWidget listeners={listeners} connected={connected}/>
+          </div>
+        )}
+        <button onClick={() => toggleLike(currentSong._id)} className="hidden sm:flex p-1.5 hover:bg-zinc-800 rounded-lg transition text-zinc-600 hover:text-white">
+          <Heart size={14} fill={currentSong.liked ? '#ef4444' : 'none'} className={currentSong.liked ? 'text-red-500' : ''}/>
+        </button>
+        <CacheButton song={currentSong} cacheAudio={cacheAudio} removeCached={removeCached} isAudioCached={isAudioCached}/>
+        <button
+          onClick={() => setShowListenParty(true)}
+          className="hidden md:flex p-1.5 hover:bg-zinc-800 rounded-lg transition text-zinc-600 hover:text-blue-400"
+          title="Listen Party"
+        >
+          <Radio size={14}/>
+        </button>
+        <button
+          onClick={() => { initAudioEngine(); navigate('/player'); }}
+          className="hidden md:flex p-1.5 hover:bg-zinc-800 rounded-lg transition text-zinc-600 hover:text-white"
+        >
+          <Maximize2 size={14}/>
+        </button>
+        <Sliders
+          onClick={() => { initAudioEngine(); setShowEQ(true); }}
+          size={14}
+          className="cursor-pointer hidden sm:block transition text-zinc-600 hover:text-red-500"
+        />
+        <ListOrdered
+          onClick={() => setShowQueue(!showQueue)}
+          size={14}
+          className={`cursor-pointer hidden sm:block transition ${showQueue ? 'text-red-500' : 'text-zinc-600 hover:text-white'}`}
+        />
+        <div className="hidden md:flex items-center gap-2">
+          <Volume2 size={14} className="text-zinc-600 shrink-0"/>
+          <input
+            type="range"
+            value={volume}
+            className="w-20 accent-red-600 h-1 cursor-pointer rounded-lg appearance-none bg-zinc-700"
+            onChange={e => setVolume(parseInt(e.target.value))}
+          />
+        </div>
+      </div>
+
+    </div>
+  </footer>
+)}
 
       {/* ════════ MINI PLAYER MOBILE ════════ */}
-        <MiniPlayerMobile
-          currentSong={currentSong}
-          isPlaying={isPlaying}
-          setIsPlaying={setIsPlaying}
-          handleNext={handleNext}
-          toggleLike={toggleLike}
-          onOpenFullPlayer={() => navigate('/player')}
-          currentTime={currentTime}
-          duration={duration}
-          initAudioEngine={initAudioEngine}
-          audioRef={audioRef}
-          cacheAudio={cacheAudio}
-          removeCached={removeCached}
-          isAudioCached={isAudioCached}
-        />
+<MiniPlayerMobile
+  currentSong={currentSong}
+  isPlaying={isPlaying}
+  setIsPlaying={setIsPlaying}
+  handleNext={handleNext}
+  toggleLike={toggleLike}
+  onOpenFullPlayer={() => navigate('/player')}
+  currentTime={currentTime}
+  duration={duration}
+  initAudioEngine={initAudioEngine}
+  audioRef={audioRef}
+  cacheAudio={cacheAudio}
+  removeCached={removeCached}
+  isAudioCached={isAudioCached}
+/>
 
       {/* ════════ RADIO VIEW ════════ */}
       {showRadio && (
