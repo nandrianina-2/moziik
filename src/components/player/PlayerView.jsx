@@ -5,7 +5,7 @@ import {
   Volume2, VolumeX, Radio, Tag,
   MessageCircle, Download, Share2, Moon, Check,
 } from 'lucide-react';
-import "./fullplayer.css"
+import "./fullPlayer.css"
 
 /**
  * @param {{
