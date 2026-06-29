@@ -14,7 +14,7 @@ import { useQueueDrag }        from './hooks/useQueueDrag';
 import { useLocalAuth }        from './hooks/useLocalAuth';
 import { useAudioCache }       from '../../hooks/usePWA';
 
-import PlayerView    from './PlayerView';
+// import PlayerView    from './PlayerView';
 import { EQPanel }  from './panels/EQPanel';
 import QueuePanel   from './panels/QueuePanel';
 import InfosPanel   from './panels/InfosPanel';
@@ -169,23 +169,23 @@ const FullPlayerPage = ({
     accentColor: accentHex,
   };
 
-  const playerViewProps = {
-    currentSong, isPlaying, setIsPlaying,
-    currentTime, duration,
-    handleNext, handlePrev,
-    isShuffle, setIsShuffle,
-    repeatMode, setRepeatMode,
-    volume, setVolume,
-    sleepTimer, setSleepTimer,
-    accentHex, accentCSS,
-    heartAnim, onLike: handleLike,
-    onSeek, onSeekTouch,
-    tsComments, onSeekToTimestamp, setActiveTab,
-    formatTime, initAudioEngine,
-    onOpenListenParty,
-    onShareClick: () => setShowShare(true),
-    isAudioCached, cacheAudio, removeCached,
-  };
+  // const playerViewProps = {
+  //   currentSong, isPlaying, setIsPlaying,
+  //   currentTime, duration,
+  //   handleNext, handlePrev,
+  //   isShuffle, setIsShuffle,
+  //   repeatMode, setRepeatMode,
+  //   volume, setVolume,
+  //   sleepTimer, setSleepTimer,
+  //   accentHex, accentCSS,
+  //   heartAnim, onLike: handleLike,
+  //   onSeek, onSeekTouch,
+  //   tsComments, onSeekToTimestamp, setActiveTab,
+  //   formatTime, initAudioEngine,
+  //   onOpenListenParty,
+  //   onShareClick: () => setShowShare(true),
+  //   isAudioCached, cacheAudio, removeCached,
+  // };
 
   const commentsPanelProps = {
     songId: currentSong?._id,
@@ -209,8 +209,8 @@ const FullPlayerPage = ({
 
   const renderPanel = (tab) => {
     switch (tab) {
-      case 'player':
-        return <PlayerView {...playerViewProps} />;
+      // case 'player':
+        // return <PlayerView {...playerViewProps} />;
       case 'eq':
         return (
           <div className="fp-fade" style={{ flex: 1 }}>
