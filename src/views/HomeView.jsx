@@ -294,7 +294,7 @@ const AdminAlertBanner = ({ token, isAdmin }) => {
 
 
 // ── Section partages récents ─────────────────
-const RecentSharesSection = ({ token, setCurrentSong, setIsPlaying, currentSong, musiques }) => {
+const RecentSharesSection = ({ token, setCurrentSong, setIsPlaying, currentSong, musiques, playSong }) => {
   const [shares, setShares] = useState([]);
   const { expanded, limit, toggle } = useShowMore(8);
 
@@ -312,7 +312,7 @@ const RecentSharesSection = ({ token, setCurrentSong, setIsPlaying, currentSong,
 
   const resolveAndPlay = (songId) => {
     const fullSong = musiques?.find(m => m._id === (songId?._id || songId));
-    if (fullSong) { setCurrentSong(fullSong); setIsPlaying(true); }
+    if (fullSong) { if (playSong) playSong(fullSong); else { setCurrentSong(fullSong); setIsPlaying(true); } }
   };
 
   return (
@@ -480,7 +480,7 @@ const EventsBannerSlider = ({ setCurrentSong, setIsPlaying }) => {
 // ════════════════════════════════════════════
 // SECTION HORS-LIGNE
 // ════════════════════════════════════════════
-const OfflineSection = ({ musiques, setCurrentSong, setIsPlaying, currentSong, isPlaying, isAudioCached }) => {
+const OfflineSection = ({ musiques, setCurrentSong, setIsPlaying, currentSong, isPlaying, isAudioCached, playSong }) => {
   const cached = useMemo(() => musiques.filter(s => isAudioCached && isAudioCached(s._id)), [musiques, isAudioCached]);
 
   const COLS = 2;
@@ -511,7 +511,7 @@ const OfflineSection = ({ musiques, setCurrentSong, setIsPlaying, currentSong, i
                     song={song}
                     isActive={currentSong?._id === song._id}
                     isPlaying={isPlaying}
-                    onClick={() => { setCurrentSong(song); setIsPlaying(true); }}
+                    onClick={() => { if (playSong) playSong(song); else { setCurrentSong(song); setIsPlaying(true); } }}
                   />
                 ))}
               </div>
@@ -530,7 +530,7 @@ const OfflineSection = ({ musiques, setCurrentSong, setIsPlaying, currentSong, i
               song={song}
               isActive={currentSong?._id === song._id}
               isPlaying={isPlaying}
-              onClick={() => { setCurrentSong(song); setIsPlaying(true); }}
+              onClick={() => { if (playSong) playSong(song); else { setCurrentSong(song); setIsPlaying(true); } }}
             />
           ))}
         </div>
@@ -571,7 +571,7 @@ const OfflineSongCard = ({ song, isActive, isPlaying, onClick }) => (
 // ════════════════════════════════════════════
 // SECTION PLAYLISTS PUBLIQUES
 // ════════════════════════════════════════════
-const PublicPlaylistsSection = ({ token, setCurrentSong, setIsPlaying, currentSong, isPlaying, musiques }) => {
+const PublicPlaylistsSection = ({ token, setCurrentSong, setIsPlaying, currentSong, isPlaying, musiques, playSong }) => {
   const [playlists, setPlaylists] = useState([]);
   const [loading, setLoading]     = useState(true);
   const { expanded, limit, toggle } = useShowMore(8);
@@ -593,7 +593,7 @@ const PublicPlaylistsSection = ({ token, setCurrentSong, setIsPlaying, currentSo
     const firstSongId = playlist.musiques?.[0]?._id || playlist.musiques?.[0];
     if (!firstSongId) return;
     const full = musiques?.find(m => m._id === firstSongId);
-    if (full) { setCurrentSong(full); setIsPlaying(true); }
+    if (full) { if (playSong) playSong(full); else { setCurrentSong(full); setIsPlaying(true); } }
   };
 
   return (
@@ -664,7 +664,7 @@ const PublicPlaylistsSection = ({ token, setCurrentSong, setIsPlaying, currentSo
 // HOME VIEW
 // ════════════════════════════════════════════
 const HomeView = ({
-  musiques, currentSong, setCurrentSong, setIsPlaying, isPlaying,
+  musiques, currentSong, setCurrentSong, setIsPlaying, isPlaying, playSong,
   toggleLike, addToQueue, isAdmin, isArtist, isUser,
   userArtistId, playlists, userPlaylists, token, activeMenu,
   setActiveMenu, ajouterAPlaylist, dragOverId, dragSongId,
@@ -858,8 +858,8 @@ const HomeView = ({
   const playFullSong = useCallback((songOrId) => {
     const id   = songOrId?._id || songOrId;
     const full = songs.find(s => s._id === id);
-    if (full) { setCurrentSong(full); setIsPlaying(true); }
-  }, [songs, setCurrentSong, setIsPlaying]);
+    if (full) { if (playSong) playSong(full); else { setCurrentSong(full); setIsPlaying(true); } }
+  }, [songs, setCurrentSong, setIsPlaying, playSong]);
 
 
 
@@ -902,6 +902,7 @@ const HomeView = ({
         setCurrentSong={setCurrentSong}
         setIsPlaying={setIsPlaying}
         isPlaying={isPlaying}
+        playSong={playSong}
         toggleLike={toggleLike}
         addToQueue={addToQueue}             
         token={token}                          
@@ -1312,6 +1313,7 @@ const HomeView = ({
         currentSong={currentSong}
         isPlaying={isPlaying}
         musiques={songs}
+        playSong={playSong}
       />
 
       {/* ══ INCONNUS MAIS EXCELLENTS (gems hybrides) ══ */}
@@ -1396,6 +1398,7 @@ const HomeView = ({
         currentSong={currentSong}
         isPlaying={isPlaying}
         isAudioCached={isAudioCached}
+        playSong={playSong}
       />
 
       {/* ══ MES PARTAGES ══ */}
@@ -1406,6 +1409,7 @@ const HomeView = ({
           setCurrentSong={setCurrentSong}
           setIsPlaying={setIsPlaying}
           currentSong={currentSong}
+          playSong={playSong}
         />
       )}
 

@@ -73,6 +73,12 @@ const ArtistDashboard = ({ token, userArtistId, userNom }) => {
   const [savingEvent, setSavingEvent] = useState(false);
   const eventImgRef = useRef();
 
+  // ── Planning (sorties programmées) ──
+  const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({ songId: '', releaseAt: '', note: '' });
+  const [savingSchedule, setSavingSchedule] = useState(false);
+  const [cancelingScheduleId, setCancelingScheduleId] = useState(null);
+
   const h = { Authorization: `Bearer ${token}` };
 
   // ── Chargement initial ──
@@ -256,6 +262,55 @@ const ArtistDashboard = ({ token, userArtistId, userNom }) => {
     });
   };
 
+  // Planning — programmer une sortie
+  const createSchedule = async (e) => {
+    e.preventDefault();
+    if (!scheduleForm.songId)   return showFeedback('Choisissez un titre à programmer', true);
+    if (!scheduleForm.releaseAt) return showFeedback('Choisissez une date de sortie', true);
+    if (new Date(scheduleForm.releaseAt) <= new Date()) return showFeedback('La date doit être dans le futur', true);
+    setSavingSchedule(true);
+    try {
+      const res = await fetch(`${API}/artists/${userArtistId}/schedule`, {
+        method: 'POST', headers: { ...h, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ songId: scheduleForm.songId, releaseAt: scheduleForm.releaseAt, note: scheduleForm.note })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Erreur lors de la programmation');
+      // Le backend peut renvoyer soit l'entrée seule, soit déjà enrichie avec songId peuplé.
+      // On reconstruit un fallback local avec la chanson sélectionnée pour un affichage immédiat.
+      const song = songs.find(s => s._id === scheduleForm.songId);
+      const entry = data?.songId ? data : { ...data, songId: song || { _id: scheduleForm.songId } };
+      setScheduled(prev => [...prev, entry].sort((a, b) => new Date(a.releaseAt) - new Date(b.releaseAt)));
+      setScheduleForm({ songId: '', releaseAt: '', note: '' });
+      setShowScheduleForm(false);
+      showFeedback('Sortie programmée ! Elle sera publiée automatiquement à la date prévue 📅');
+    } catch (err) { showFeedback(err.message, true); }
+    setSavingSchedule(false);
+  };
+
+  // Planning — annuler une sortie programmée
+  const cancelSchedule = (entry) => {
+    const titre = entry.songId?.titre || 'cette sortie';
+    ask({
+      title: `Annuler la programmation de "${titre}" ?`,
+      message: 'Le titre ne sera pas publié automatiquement.',
+      confirmLabel: 'Annuler la sortie',
+      variant: 'danger',
+      onConfirm: async () => {
+        setCancelingScheduleId(entry._id);
+        try {
+          const res = await fetch(`${API}/artists/${userArtistId}/schedule/${entry._id}`, {
+            method: 'DELETE', headers: h
+          });
+          if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Erreur lors de l\'annulation'); }
+          setScheduled(prev => prev.filter(r => r._id !== entry._id));
+          showFeedback('Programmation annulée');
+        } catch (err) { showFeedback(err.message, true); }
+        setCancelingScheduleId(null);
+      }
+    });
+  };
+
   // ── Tabs ──
   const tabs = [
     { k: 'newsletter', icon: <Send size={13}/>,        label: 'Newsletter'    },
@@ -269,6 +324,10 @@ const ArtistDashboard = ({ token, userArtistId, userNom }) => {
   ];
 
   const minDate = new Date(Date.now() + 3600000).toISOString().slice(0, 16);
+
+  // Titres pas encore programmés (pour éviter les doublons dans le sélecteur de planning)
+  const scheduledSongIds = new Set(scheduled.filter(r => new Date(r.releaseAt) > new Date()).map(r => r.songId?._id || r.songId));
+  const schedulableSongs = songs.filter(s => !scheduledSongIds.has(s._id));
 
   // ════════════════════════════════════════════
   // RENDER
@@ -439,35 +498,93 @@ const ArtistDashboard = ({ token, userArtistId, userNom }) => {
           TAB: PLANNING
       ══════════════════════════════════════ */}
       {tab === 'schedule' && (
-        <Section icon={<Calendar size={15}/>} title="Sorties programmées">
-          {scheduled.length === 0
-            ? <div className="text-center py-8 text-zinc-600">
-                <Calendar size={32} className="mx-auto mb-2 opacity-20"/>
-                <p className="text-sm">Aucune sortie programmée</p>
-                <p className="text-[11px] mt-1 text-zinc-700">Lors d'un upload, choisissez une date future</p>
-              </div>
-            : <div className="space-y-3">
-                {scheduled.map(r => {
-                  const future = new Date(r.releaseAt) > new Date();
-                  return (
-                    <div key={r._id} className="flex items-center gap-3 p-3 bg-zinc-800/40 rounded-xl">
-                      {r.songId?.image && <img src={r.songId.image} className="w-10 h-10 rounded-lg object-cover shrink-0" alt="" />}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{r.songId?.titre}</p>
-                        <p className="text-[10px] text-zinc-500 flex items-center gap-1 mt-0.5">
-                          <Clock size={9}/>
-                          {new Date(r.releaseAt).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric' })}
-                        </p>
+        <div className="space-y-5">
+          <Section icon={<Calendar size={15}/>} title="Programmer une sortie">
+            {!showScheduleForm ? (
+              <button onClick={() => setShowScheduleForm(true)} disabled={schedulableSongs.length === 0}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm transition disabled:opacity-40 disabled:cursor-not-allowed">
+                <Plus size={14}/> Programmer une sortie
+              </button>
+            ) : (
+              <form onSubmit={createSchedule} className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">Titre à publier *</label>
+                  <select value={scheduleForm.songId} onChange={e => setScheduleForm(p => ({ ...p, songId: e.target.value }))}
+                    required
+                    className="w-full bg-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 ring-red-600 text-white">
+                    <option value="">— Choisir un titre —</option>
+                    {schedulableSongs.map(s => <option key={s._id} value={s._id}>{s.titre}</option>)}
+                  </select>
+                  {schedulableSongs.length === 0 && (
+                    <p className="text-[10px] text-zinc-600 mt-1">Tous vos titres sont déjà programmés ou aucun titre disponible.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">Date et heure de sortie *</label>
+                  <input type="datetime-local" value={scheduleForm.releaseAt} min={minDate}
+                    onChange={e => setScheduleForm(p => ({ ...p, releaseAt: e.target.value }))} required
+                    className="w-full bg-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 ring-red-600 text-white" />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1.5">Note (optionnel)</label>
+                  <input value={scheduleForm.note} onChange={e => setScheduleForm(p => ({ ...p, note: e.target.value }))}
+                    placeholder="ex: annoncer en story 1h avant"
+                    className="w-full bg-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 ring-red-600 text-white placeholder-zinc-600" />
+                </div>
+                <div className="flex gap-2">
+                  <button type="submit" disabled={savingSchedule}
+                    className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-2.5 rounded-xl text-sm transition flex items-center justify-center gap-2 disabled:opacity-50">
+                    {savingSchedule ? <Loader2 size={14} className="animate-spin"/> : <Calendar size={14}/>}
+                    {savingSchedule ? 'Programmation...' : 'Programmer'}
+                  </button>
+                  <button type="button" onClick={() => { setShowScheduleForm(false); setScheduleForm({ songId: '', releaseAt: '', note: '' }); }}
+                    className="px-4 py-2.5 text-zinc-400 hover:text-white text-sm rounded-xl hover:bg-zinc-800 transition">
+                    Annuler
+                  </button>
+                </div>
+              </form>
+            )}
+          </Section>
+
+          <Section icon={<Clock size={15}/>} title="Sorties programmées">
+            {scheduled.length === 0
+              ? <div className="text-center py-8 text-zinc-600">
+                  <Calendar size={32} className="mx-auto mb-2 opacity-20"/>
+                  <p className="text-sm">Aucune sortie programmée</p>
+                  <p className="text-[11px] mt-1 text-zinc-700">Utilisez le formulaire ci-dessus pour planifier une publication automatique</p>
+                </div>
+              : <div className="space-y-3">
+                  {[...scheduled].sort((a, b) => new Date(a.releaseAt) - new Date(b.releaseAt)).map(r => {
+                    const future = new Date(r.releaseAt) > new Date();
+                    const isCanceling = cancelingScheduleId === r._id;
+                    return (
+                      <div key={r._id} className="flex items-center gap-3 p-3 bg-zinc-800/40 rounded-xl">
+                        {r.songId?.image && <img src={r.songId.image} className="w-10 h-10 rounded-lg object-cover shrink-0" alt="" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate">{r.songId?.titre || 'Titre'}</p>
+                          <p className="text-[10px] text-zinc-500 flex items-center gap-1 mt-0.5">
+                            <Clock size={9}/>
+                            {new Date(r.releaseAt).toLocaleDateString('fr-FR', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                          </p>
+                          {r.note && <p className="text-[10px] text-zinc-600 truncate mt-0.5">📝 {r.note}</p>}
+                        </div>
+                        <span className={`text-[9px] font-bold px-2 py-1 rounded-full shrink-0 ${future ? 'bg-orange-500/15 text-orange-400' : 'bg-green-500/15 text-green-400'}`}>
+                          {future ? 'EN ATTENTE' : 'PUBLIÉ'}
+                        </span>
+                        {future && (
+                          <button onClick={() => cancelSchedule(r)} disabled={isCanceling}
+                            className="p-1.5 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition disabled:opacity-40 shrink-0"
+                            title="Annuler la programmation">
+                            {isCanceling ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>}
+                          </button>
+                        )}
                       </div>
-                      <span className={`text-[9px] font-bold px-2 py-1 rounded-full shrink-0 ${future ? 'bg-orange-500/15 text-orange-400' : 'bg-green-500/15 text-green-400'}`}>
-                        {future ? 'EN ATTENTE' : 'PUBLIÉ'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-          }
-        </Section>
+                    );
+                  })}
+                </div>
+            }
+          </Section>
+        </div>
       )}
 
       {/* ══════════════════════════════════════

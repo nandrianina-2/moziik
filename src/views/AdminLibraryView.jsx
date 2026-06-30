@@ -17,9 +17,10 @@ import {
   Search, CheckCircle, Edit3, Save, X,
   Trash2, Music, Mic2, Disc3, RefreshCw,
   Loader2, SortAsc, SortDesc, Bell,
-  Image as ImageIcon, Tag, Eye,
+  Image as ImageIcon, Tag, Eye, EyeOff,
   ArrowUpDown, AlertCircle, Check, Camera,
-  Plus, Upload, FileAudio, Link2, Zap
+  Plus, Upload, FileAudio, Link2, Zap,
+  Download, Globe, CheckSquare, Square
 } from 'lucide-react';
 import { API } from '../config/api';
 
@@ -58,6 +59,56 @@ const compressImageFile = async (file) => {
 // ── Formatage taille ──────────────────────────
 const fmtSize = (b) => b < 1048576 ? `${(b/1024).toFixed(0)} KB` : `${(b/1048576).toFixed(1)} MB`;
 
+// ════════════════════════════════════════════════════════════════
+// PUBLICATION (frontend uniquement, sans modification backend)
+// ════════════════════════════════════════════════════════════════
+// Le backend n'a pas forcément de champ "publie" en base. On gère donc
+// l'état publié/dépublié côté admin via localStorage (persistant entre
+// sessions sur ce navigateur), tout en tentant en best-effort de
+// renvoyer le champ "publie" au PUT existant (s'il est ignoré côté
+// serveur, l'override local prend toujours le dessus pour l'affichage).
+const PUBLISH_OVERRIDES_KEY = 'moozik_admin_publish_overrides';
+
+const loadPublishOverrides = () => {
+  try {
+    const raw = localStorage.getItem(PUBLISH_OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+};
+
+const savePublishOverrides = (overrides) => {
+  try { localStorage.setItem(PUBLISH_OVERRIDES_KEY, JSON.stringify(overrides)); } catch {}
+};
+
+// Statut effectif : override local > champ song.publie > publié par défaut
+const isPublished = (song, overrides) => {
+  if (overrides && Object.prototype.hasOwnProperty.call(overrides, song._id)) return overrides[song._id];
+  return song.publie !== false; // legacy : tout ce qui n'a pas le champ est considéré publié
+};
+
+// ── Export CSV (pur frontend) ─────────────────────────────────
+const exportSongsCSV = (songsList, overrides, filename = 'bibliotheque-musiques.csv') => {
+  const headers = ['Titre', 'Artiste', 'Genre', 'Annee', 'Moods', 'Ecoutes', 'Statut', 'Publication'];
+  const rows = songsList.map(s => [
+    s.titre || '',
+    s.artiste || '',
+    s.genre || '',
+    s.annee || '',
+    (s.moods || []).join(' / '),
+    s.plays || 0,
+    (s.artiste?.trim() || s.artisteId) && s.albumId && s.moods?.length ? 'Complet' : 'Incomplet',
+    isPublished(s, overrides) ? 'Publié' : 'Brouillon',
+  ]);
+  const esc = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
 // ── Badge statut ──────────────────────────────
 // FIX : vérifie artiste string OU artisteId object/string
 const StatusBadge = ({ song }) => {
@@ -79,6 +130,18 @@ const StatusBadge = ({ song }) => {
     </span>
   );
 };
+
+// ── Badge publication ─────────────────────────
+const PublishBadge = ({ published }) =>
+  published ? (
+    <span className="flex items-center gap-1 text-[9px] font-bold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full">
+      <Globe size={8}/> Publié
+    </span>
+  ) : (
+    <span className="flex items-center gap-1 text-[9px] font-bold text-zinc-500 bg-zinc-700/30 px-2 py-0.5 rounded-full">
+      <EyeOff size={8}/> Brouillon
+    </span>
+  );
 
 // ════════════════════════════════════════════
 // MODAL AJOUT MUSIQUE
@@ -442,7 +505,7 @@ const AddSongModal = ({ token, artists, albums, onClose, onAdded }) => {
 // ════════════════════════════════════════════
 // MODAL ÉDITION COMPLÈTE
 // ════════════════════════════════════════════
-const EditSongModal = ({ song, token, artists, albums, onClose, onSaved }) => {
+const EditSongModal = ({ song, token, artists, albums, published, onTogglePublish, onClose, onSaved }) => {
   const [titre, setTitre]         = useState(song.titre || '');
   const [artiste, setArtiste]     = useState(song.artiste || '');
   const [artisteId, setArtisteId] = useState(song.artisteId?._id || song.artisteId || '');
@@ -552,6 +615,17 @@ const EditSongModal = ({ song, token, artists, albums, onClose, onSaved }) => {
         <div className="px-5 pt-4">
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <StatusBadge song={{ ...song, artiste, artisteId, albumId, moods: selectedMoods }}/>
+            <PublishBadge published={published}/>
+            {onTogglePublish && (
+              <button onClick={onTogglePublish} type="button"
+                className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full border transition ${
+                  published
+                    ? 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+                    : 'bg-blue-600/15 border-blue-600/30 text-blue-300 hover:bg-blue-600/25'
+                }`}>
+                {published ? <><EyeOff size={10}/> Dépublier</> : <><Globe size={10}/> Publier</>}
+              </button>
+            )}
             {imgFile && !imgCompressing && (
               <span className="text-[9px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <Zap size={8}/> Image compressée ({fmtSize(imgFile.size)})
@@ -766,6 +840,9 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
   const [deleting, setDeleting]     = useState(null);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [page, setPage]             = useState(1);
+  const [publishOverrides, setPublishOverrides] = useState(() => loadPublishOverrides());
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const PAGE_SIZE = 30;
 
   const load = useCallback(async () => {
@@ -811,6 +888,8 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
     if (filter === 'incomplete') list = list.filter(s => !s.artiste?.trim() && !s.artisteId);
     if (filter === 'complete')   list = list.filter(s =>  s.artiste?.trim() || s.artisteId);
     if (filter === 'nomood')     list = list.filter(s => !s.moods?.length);
+    if (filter === 'published')  list = list.filter(s =>  isPublished(s, publishOverrides));
+    if (filter === 'draft')      list = list.filter(s => !isPublished(s, publishOverrides));
     if (moodFilter)              list = list.filter(s =>  s.moods?.includes(moodFilter));
 
     list.sort((a, b) => {
@@ -823,12 +902,14 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
       return 0;
     });
     return list;
-  }, [songs, search, filter, moodFilter, sortBy, sortDir]);
+  }, [songs, search, filter, moodFilter, sortBy, sortDir, publishOverrides]);
 
   const totalPages      = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated       = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const incompleteCount = useMemo(() => songs.filter(s => !s.artiste?.trim() && !s.artisteId).length, [songs]);
   const noMoodCount     = useMemo(() => songs.filter(s => !s.moods?.length).length, [songs]);
+  const publishedCount  = useMemo(() => songs.filter(s =>  isPublished(s, publishOverrides)).length, [songs, publishOverrides]);
+  const draftCount      = useMemo(() => songs.filter(s => !isPublished(s, publishOverrides)).length, [songs, publishOverrides]);
 
   // FIX : reset page sur changement de filtre/mood
   const handleFilterChange  = (f) => { setFilter(f);   setPage(1); };
@@ -856,6 +937,73 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
 
   const handleAdded = (newSong) =>
     setSongs(prev => [newSong, ...prev]);
+
+  // ── Publication / dépublication (frontend, voir note plus haut) ──
+  // Mise à jour optimiste immédiate + persistance localStorage.
+  // Tentative best-effort d'envoi au backend existant (PUT /songs/:id)
+  // en renvoyant les champs déjà connus de la musique pour ne rien
+  // écraser ; si le backend ignore le champ "publie", l'override local
+  // continue de faire foi pour l'affichage admin.
+  const applyPublishOverride = useCallback((ids, value) => {
+    setPublishOverrides(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = value; });
+      savePublishOverrides(next);
+      return next;
+    });
+    ids.forEach(id => {
+      const song = songs.find(s => s._id === id);
+      if (!song) return;
+      const fd = new FormData();
+      fd.append('titre',   song.titre || '');
+      fd.append('artiste', song.artiste || '');
+      if (song.artisteId) fd.append('artisteId', song.artisteId?._id || song.artisteId);
+      if (song.albumId)   fd.append('albumId',   song.albumId?._id   || song.albumId);
+      if (song.genre)     fd.append('genre',     song.genre);
+      if (song.annee)     fd.append('annee',     song.annee);
+      fd.append('moods',  JSON.stringify(song.moods || []));
+      fd.append('publie', value ? 'true' : 'false');
+      fetch(`${API}/songs/${id}`, {
+        method: 'PUT', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      }).catch(() => {}); // best-effort, l'override local reste la source de vérité
+    });
+  }, [songs, token]);
+
+  const togglePublish = (song) => applyPublishOverride([song._id], !isPublished(song, publishOverrides));
+
+  // ── Sélection multiple ───────────────────────────────────────
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const allVisibleSelected = paginated.length > 0 && paginated.every(s => selectedIds.has(s._id));
+  const toggleSelectAllVisible = () => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (allVisibleSelected) paginated.forEach(s => next.delete(s._id));
+    else paginated.forEach(s => next.add(s._id));
+    return next;
+  });
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkPublish = async (value) => {
+    setBulkBusy(true);
+    applyPublishOverride(Array.from(selectedIds), value);
+    setBulkBusy(false);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (!window.confirm(`Supprimer définitivement ${ids.length} musique${ids.length > 1 ? 's' : ''} ?`)) return;
+    setBulkBusy(true);
+    await Promise.all(ids.map(id =>
+      fetch(`${API}/songs/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
+    ));
+    setSongs(prev => prev.filter(s => !selectedIds.has(s._id)));
+    clearSelection();
+    setBulkBusy(false);
+  };
 
   // FIX : SortIcon stable (pas de inline component dans JSX)
   const renderSortIcon = (col) => {
@@ -887,6 +1035,11 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
           <button onClick={() => setShowAddModal(true)}
             className="flex items-center gap-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 px-4 py-2 rounded-xl transition active:scale-95 shadow-lg shadow-red-600/20">
             <Plus size={14}/> Ajouter une musique
+          </button>
+          <button onClick={() => exportSongsCSV(filtered, publishOverrides)}
+            className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 rounded-xl transition"
+            title="Exporter la liste filtrée en CSV">
+            <Download size={13}/> Export CSV
           </button>
           <button onClick={load} disabled={loading}
             className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 rounded-xl transition disabled:opacity-50">
@@ -925,6 +1078,8 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
             ['incomplete', '⚠️ Sans artiste', incompleteCount                 ],
             ['complete',   '✓ Complets',      songs.length - incompleteCount  ],
             ['nomood',     '🏷️ Sans mood',    noMoodCount                     ],
+            ['published',  '🌐 Publié',       publishedCount                  ],
+            ['draft',      '📝 Brouillon',    draftCount                      ],
           ].map(([k, l, c]) => (
             <button key={k} onClick={() => handleFilterChange(k)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
@@ -948,6 +1103,35 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
         </div>
       </div>
 
+      {/* Barre d'actions groupées — visible quand des musiques sont sélectionnées */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 bg-red-600/8 border border-red-600/20 rounded-xl px-4 py-2.5">
+          <span className="text-xs font-bold text-red-300">{selectedIds.size} sélectionnée{selectedIds.size > 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-2 ml-auto flex-wrap">
+            <button onClick={() => handleBulkPublish(true)} disabled={bulkBusy}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-blue-300 bg-blue-600/10 hover:bg-blue-600/20 border border-blue-600/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+              <Globe size={12}/> Publier
+            </button>
+            <button onClick={() => handleBulkPublish(false)} disabled={bulkBusy}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-300 bg-zinc-700/30 hover:bg-zinc-700/50 border border-zinc-700 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+              <EyeOff size={12}/> Dépublier
+            </button>
+            <button onClick={() => exportSongsCSV(songs.filter(s => selectedIds.has(s._id)), publishOverrides, 'selection-musiques.csv')}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 px-3 py-1.5 rounded-lg transition">
+              <Download size={12}/> Export
+            </button>
+            <button onClick={handleBulkDelete} disabled={bulkBusy}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-red-300 bg-red-600/10 hover:bg-red-600/20 border border-red-600/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50">
+              {bulkBusy ? <Loader2 size={12} className="animate-spin"/> : <Trash2 size={12}/>} Supprimer
+            </button>
+            <button onClick={clearSelection}
+              className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-500 hover:text-white px-2 py-1.5 rounded-lg transition">
+              <X size={12}/> Annuler
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-16 text-zinc-600">
@@ -956,7 +1140,10 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
       ) : (
         <>
           {/* En-têtes colonnes */}
-          <div className="hidden md:grid grid-cols-[auto_1fr_1fr_1fr_auto_auto_auto] gap-3 px-4 py-2 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">
+          <div className="hidden md:grid grid-cols-[auto_auto_1fr_1fr_1fr_auto_auto_auto] gap-3 px-4 py-2 text-[10px] font-bold text-zinc-600 uppercase tracking-widest items-center">
+            <button onClick={toggleSelectAllVisible} className="text-zinc-500 hover:text-white transition" title="Sélectionner tout">
+              {allVisibleSelected ? <CheckSquare size={14} className="text-red-400"/> : <Square size={14}/>}
+            </button>
             <div className="w-10"/>
             <button onClick={() => toggleSort('titre')}   className="flex items-center gap-1 hover:text-zinc-300 transition text-left">
               Titre {renderSortIcon('titre')}
@@ -985,12 +1172,19 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
             ) : paginated.map(song => {
               const isActive = currentSong?._id === song._id;
               const isDel    = deleting === song._id;
+              const published = isPublished(song, publishOverrides);
+              const isSelected = selectedIds.has(song._id);
               return (
                 <div key={song._id}
                   className={`group flex items-center gap-3 p-3 rounded-xl transition cursor-pointer ${
                     isActive ? 'bg-red-600/8 border border-red-600/15' : 'hover:bg-zinc-900/60 border border-transparent'
-                  }`}
+                  } ${!published ? 'opacity-70' : ''}`}
                   onClick={() => { setCurrentSong(song); setIsPlaying(true); }}>
+
+                  <button onClick={e => { e.stopPropagation(); toggleSelect(song._id); }}
+                    className="shrink-0 text-zinc-500 hover:text-white transition">
+                    {isSelected ? <CheckSquare size={15} className="text-red-400"/> : <Square size={15}/>}
+                  </button>
 
                   <div className="w-10 h-10 rounded-lg overflow-hidden bg-zinc-800 shrink-0 relative">
                     {song.image
@@ -1026,12 +1220,22 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
                     <Eye size={9}/> {song.plays?.toLocaleString() || 0}
                   </div>
 
-                  <div className="hidden md:block shrink-0">
+                  <div className="hidden md:flex flex-col items-start gap-1 shrink-0">
                     <StatusBadge song={song}/>
+                    <PublishBadge published={published}/>
                   </div>
 
                   <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition shrink-0"
                     onClick={e => e.stopPropagation()}>
+                    <button onClick={() => togglePublish(song)}
+                      className={`p-1.5 rounded-lg transition ${
+                        published
+                          ? 'hover:bg-zinc-700 text-zinc-500 hover:text-white'
+                          : 'hover:bg-blue-600/20 text-blue-400'
+                      }`}
+                      title={published ? 'Dépublier' : 'Publier'}>
+                      {published ? <Eye size={14}/> : <EyeOff size={14}/>}
+                    </button>
                     <button onClick={() => setEditingSong(song)}
                       className="p-1.5 hover:bg-zinc-700 text-zinc-500 hover:text-white rounded-lg transition" title="Modifier">
                       <Edit3 size={14}/>
@@ -1080,6 +1284,8 @@ const AdminLibraryView = ({ token, currentSong, setCurrentSong, setIsPlaying, is
       {editingSong && (
         <EditSongModal
           song={editingSong} token={token} artists={artists} albums={albums}
+          published={isPublished(editingSong, publishOverrides)}
+          onTogglePublish={() => togglePublish(editingSong)}
           onClose={() => setEditingSong(null)}
           onSaved={updated => { handleSaved(updated); setEditingSong(null); }}
         />

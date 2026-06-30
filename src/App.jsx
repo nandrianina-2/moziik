@@ -86,6 +86,30 @@ const getTrendingScore = (song) => {
 const sortByTrending = (songs) =>
   [...songs].sort((a, b) => getTrendingScore(b) - getTrendingScore(a));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LECTURE QUOTIDIENNE UNIQUE — persistance des musiques déjà jouées aujourd'hui
+// ─────────────────────────────────────────────────────────────────────────────
+const DAILY_PLAYED_KEY = 'moozik_daily_played';
+const getTodayKey = () => new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+const loadDailyPlayed = () => {
+  try {
+    const raw = localStorage.getItem(DAILY_PLAYED_KEY);
+    if (!raw) return { date: getTodayKey(), ids: new Set() };
+    const parsed = JSON.parse(raw);
+    if (parsed.date !== getTodayKey()) return { date: getTodayKey(), ids: new Set() };
+    return { date: parsed.date, ids: new Set(parsed.ids) };
+  } catch {
+    return { date: getTodayKey(), ids: new Set() };
+  }
+};
+
+const saveDailyPlayed = (state) => {
+  try {
+    localStorage.setItem(DAILY_PLAYED_KEY, JSON.stringify({ date: state.date, ids: Array.from(state.ids) }));
+  } catch {}
+};
+
   // ── Hook debounce ────────────────────────────────────────────
   const useDebounce = (value, delay) => {
     const [debounced, setDebounced] = useState(value);
@@ -200,7 +224,24 @@ const AppInner = () => {
   const sleepRef          = useRef(null);
   const playCountedRef    = useRef(false);
   const queueRef          = useRef(queue);
-  const shuffleHistoryRef = useRef(new Set());
+  // S'assure que la liste "déjà joué aujourd'hui" correspond bien à la date du jour
+  const dailyPlayedRef = useRef(loadDailyPlayed());
+  const ensureDailyFresh = useCallback(() => {
+    const today = getTodayKey();
+    if (dailyPlayedRef.current.date !== today) {
+      dailyPlayedRef.current = { date: today, ids: new Set() };
+      saveDailyPlayed(dailyPlayedRef.current);
+    }
+  }, []);
+
+  // Marque automatiquement chaque musique lancée comme "jouée aujourd'hui"
+  useEffect(() => {
+    if (!currentSong?._id) return;
+    ensureDailyFresh();
+    dailyPlayedRef.current.ids.add(currentSong._id);
+    saveDailyPlayed(dailyPlayedRef.current);
+  }, [currentSong, ensureDailyFresh]);
+
   const startTimeRef      = useRef(null);
   const [cachedIds, setCachedIds] = useState([]);
   const [eqGains, setEqGains]     = useState(Array(12).fill(0));
@@ -474,6 +515,18 @@ const AppInner = () => {
     setCurrentSong(song); setIsPlaying(true); setQueue(siblings);
   }, []);
 
+  // Lecture "simple" — recherche, notifications, clic direct hors playlist/catégorie/radio.
+  // Réinitialise la queue et le contexte de lecture pour éviter que handleNext()
+  // ne retombe sur un ancien contexte filtré (category:xxx / radio) périmé,
+  // ce qui provoquait des répétitions de chanson après une lecture manuelle.
+  const playSong = useCallback((song) => {
+    if (!song) return;
+    setQueue([]);
+    setPlayContext('trending');
+    setCurrentSong(song);
+    setIsPlaying(true);
+  }, []);
+
   const handleInfiniteRadio = useCallback(async (song) => {
     setShowRadio(true);
     try {
@@ -543,29 +596,44 @@ const AppInner = () => {
   useSessionGuard(handleSessionExpired);
 
   // ── handleNext / handlePrev ────────────────────────────────────
+  // La lecture automatique choisit toujours un morceau au hasard (aléatoire),
+  // en excluant les musiques déjà jouées aujourd'hui (persistance localStorage).
+  // Quand tout le pool du jour a été épuisé, on réinitialise uniquement ce pool
+  // pour repartir sur un nouveau cycle aléatoire complet.
   const handleNext = useCallback(() => {
     const q = queueRef.current; const mus = musiquesRef.current; const cur = currentSongRef.current;
-    const shuf = isShuffleRef.current; const rep = repeatModeRef.current; const ctx = playContextRef.current;
+    const rep = repeatModeRef.current; const ctx = playContextRef.current;
 
     if (q.length > 0) { const [next, ...rest] = q; setQueue(rest); setCurrentSong(next); setIsPlaying(true); return; }
     if (!mus.length) return;
     if (rep === 2) { if (audioRef.current) { audioRef.current.currentTime = 0; audioRef.current.play(); } return; }
-    if (shuf) {
-      if (shuffleHistoryRef.current.size >= mus.length - 1) shuffleHistoryRef.current.clear();
-      const remaining = mus.filter(s => s._id !== cur?._id && !shuffleHistoryRef.current.has(s._id));
-      const pool = remaining.length > 0 ? remaining : mus.filter(s => s._id !== cur?._id);
-      const next = pool[Math.floor(Math.random() * pool.length)];
-      if (cur?._id) shuffleHistoryRef.current.add(cur._id);
-      setCurrentSong(next); setIsPlaying(true); return;
-    }
-    let pool = [];
+
+    // Pool de base selon le contexte de lecture (catégorie ou tout le catalogue)
+    let basePool = mus;
     if (ctx.startsWith('category:')) {
       const cat = ctx.replace('category:', '');
-      pool = sortByTrending(mus.filter(s => (s.categorie || s.category || s.genre) === cat));
-    } else { pool = mus; }
-    const idx = pool.findIndex(s => s._id === cur?._id);
-    if (rep === 1 || idx < pool.length - 1) { setCurrentSong(pool[(idx + 1) % pool.length]); setIsPlaying(true); }
-  }, []);
+      basePool = mus.filter(s => (s.categorie || s.category || s.genre) === cat);
+    }
+
+    ensureDailyFresh();
+    const playedToday = dailyPlayedRef.current.ids;
+
+    // Exclut le morceau courant et tout ce qui a déjà été joué aujourd'hui
+    let pool = basePool.filter(s => s._id !== cur?._id && !playedToday.has(s._id));
+
+    // Cycle du jour épuisé pour ce pool → on le réinitialise pour permettre
+    // un nouveau tirage aléatoire complet, toujours sans répéter le morceau en cours
+    if (pool.length === 0) {
+      basePool.forEach(s => playedToday.delete(s._id));
+      saveDailyPlayed(dailyPlayedRef.current);
+      pool = basePool.filter(s => s._id !== cur?._id);
+    }
+    if (pool.length === 0) return;
+
+    const next = pool[Math.floor(Math.random() * pool.length)];
+    setCurrentSong(next);
+    setIsPlaying(true);
+  }, [ensureDailyFresh]);
 
   const handlePrev = useCallback(() => {
     const mus = musiquesRef.current; const cur = currentSongRef.current; const ctx = playContextRef.current;
@@ -699,6 +767,7 @@ const AppInner = () => {
 
   const songProps = {
     currentSong, setCurrentSong, setIsPlaying, isPlaying,
+    playSong,
     toggleLike, addToQueue, token, isLoggedIn, userNom,
     isAdmin, isArtist, userArtistId, userId,
     playlists, userPlaylists,
@@ -1025,7 +1094,7 @@ const AppInner = () => {
 
         {/* ─── MAIN CONTENT ─── */}
         <main
-          className={`flex-1 overflow-y-auto bg-gradient-to-b from-zinc-900 to-black p-4 md:p-7 pb-40 pt-20 md:pt-7 transition-all duration-300 ${showQueue ? 'md:mr-72 xl:mr-80' : ''}`}
+          className={`flex-1 overflow-y-auto bg-gradient-to-b from-zinc-900 to-black p-4 md:p-7 pb-40 pt-30 md:pt-7 transition-all duration-300 ${showQueue ? 'md:mr-72 xl:mr-80' : ''}`}
           onClick={() => setActiveMenu(null)}
         >
           <Routes>
@@ -1070,7 +1139,7 @@ const AppInner = () => {
             <Route path="/recommendations"   element={<RecommendationsView token={token} currentSong={currentSong} setCurrentSong={setCurrentSong} setIsPlaying={setIsPlaying} isPlaying={isPlaying}/>}/>
             <Route path="/share/:shareToken" element={<Suspense fallback={<ViewLoader/>}><SharePageView setCurrentSong={setCurrentSong} setIsPlaying={setIsPlaying}/></Suspense>}/>
             <Route path="/notifications"     element={isLoggedIn
-              ? <div className="w-full mx-auto py-6"><h1 className="text-xl font-black mb-6 flex items-center gap-2"><Bell size={20} className="text-red-400"/> Notifications</h1><NotificationsPanel token={token} isPage={true} onPlaySong={(sid) => { const s = musiques.find(m => m._id === sid); if (s) { setCurrentSong(s); setIsPlaying(true); } }}/></div>
+              ? <div className="w-full mx-auto py-6"><h1 className="text-xl font-black mb-6 flex items-center gap-2"><Bell size={20} className="text-red-400"/> Notifications</h1><NotificationsPanel token={token} isPage={true} onPlaySong={(sid) => { const s = musiques.find(m => m._id === sid); if (s) playSong(s); }}/></div>
               : <div className="p-8 text-zinc-500">Connectez-vous</div>
             }/>
             <Route

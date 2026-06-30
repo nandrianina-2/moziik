@@ -8,7 +8,7 @@ import {
   Map, TrendingUp, Users, MessageCircle, BarChart2,
   Loader2, Globe, Clock, Smartphone, Monitor, Tablet,
   AlertTriangle, CheckCircle, Meh, Frown, Smile,
-  Download, ChevronDown, ChevronUp, Eye, Mail
+  Download, ChevronDown, ChevronUp, Eye, Mail, RefreshCw
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'https://moozik-gft1.onrender.com';
@@ -162,19 +162,33 @@ const ArtistAnalyticsView = ({ token, artistId }) => {
   const [songs, setSongs] = useState([]);
   const [selectedSong, setSelectedSong] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const h = { Authorization: `Bearer ${token}` };
 
-  useEffect(() => {
+  const loadAnalytics = () => {
     if (!artistId) return;
-    fetch(`${API}/analytics/geo?artistId=${artistId}`, { headers: h })
-        .then(r => r.ok ? r.json() : [])
-        .then(setGeo)
-        .catch(() => {});
+    setLoading(true);
+    setLoadError(false);
+    Promise.allSettled([
+      fetch(`${API}/analytics/geo?artistId=${artistId}`, { headers: h }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/artists/${artistId}/demographics`,    { headers: h }).then(r => r.ok ? r.json() : null),
+      fetch(`${API}/artists/${artistId}/weekly-report`,   { headers: h }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/songs?artisteId=${artistId}&limit=20`).then(r => r.json()),
+    ]).then(([geoR, demoR, repR, songsR]) => {
+      if (geoR.status === 'fulfilled') setGeo(geoR.value || []);
+      if (demoR.status === 'fulfilled') setDemo(demoR.value);
+      if (repR.status === 'fulfilled') setWeeklyReports(Array.isArray(repR.value) ? repR.value : []);
+      if (songsR.status === 'fulfilled') {
+        const s = songsR.value?.songs || [];
+        setSongs(s);
+        if (s.length) setSelectedSong(prev => prev && s.some(song => song._id === prev) ? prev : s[0]._id);
+      }
+      // Si toutes les requêtes ont échoué, on affiche un message d'erreur
+      if ([geoR, demoR, repR, songsR].every(r => r.status === 'rejected')) setLoadError(true);
+    }).finally(() => setLoading(false));
+  };
 
-    fetch(`${API}/artists/${artistId}/demographics`, { headers: h }).then(r => r.ok ? r.json() : null).then(setDemo).catch(() => {});
-    fetch(`${API}/artists/${artistId}/weekly-report`, { headers: h }).then(r => r.ok ? r.json() : []).then(d => setWeeklyReports(Array.isArray(d) ? d : [])).catch(() => {});
-    fetch(`${API}/songs?artisteId=${artistId}&limit=20`).then(r => r.json()).then(d => { const s = d.songs||[]; setSongs(s); if (s.length) setSelectedSong(s[0]._id); }).catch(() => {});
-  }, [artistId]);
+  useEffect(() => { loadAnalytics(); }, [artistId]);
 
   useEffect(() => {
     if (!selectedSong) return;
@@ -203,8 +217,26 @@ const ArtistAnalyticsView = ({ token, artistId }) => {
         <div className="w-10 h-10 bg-red-600/20 rounded-2xl flex items-center justify-center">
           <BarChart2 size={18} className="text-red-400" />
         </div>
-        <h2 className="text-xl font-black">Analytics avancées</h2>
+        <h2 className="text-xl font-black flex-1">Analytics avancées</h2>
+        <button onClick={loadAnalytics} disabled={loading}
+          className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-3 py-2 rounded-xl transition disabled:opacity-50 shrink-0">
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''}/>
+          <span className="hidden sm:inline">Actualiser</span>
+        </button>
       </div>
+
+      {loadError && (
+        <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-xl text-red-400 text-xs font-bold">
+          <AlertTriangle size={13}/> Impossible de charger les statistiques. Vérifiez votre connexion et réessayez.
+        </div>
+      )}
+
+      {loading && geo.length === 0 && !demo && weeklyReports.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-zinc-600">
+          <Loader2 size={22} className="animate-spin mr-2"/> Chargement des statistiques...
+        </div>
+      ) : (
+      <>
 
       {/* Tabs */}
       <div className="flex gap-1 overflow-x-auto bg-zinc-900/40 rounded-xl p-1 border border-zinc-800/50" style={{ scrollbarWidth: 'none' }}>
@@ -320,6 +352,8 @@ const ArtistAnalyticsView = ({ token, artistId }) => {
             </div>
           )}
         </Section>
+      )}
+      </>
       )}
     </div>
   );

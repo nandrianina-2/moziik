@@ -164,7 +164,7 @@ const ShareButton = ({ song, size = 13 }) => {
 // GLOBAL SEARCH VIEW
 // ════════════════════════════════════════════
 const GlobalSearchView = ({
-  searchTerm, currentSong, setCurrentSong, setIsPlaying, isPlaying,
+  searchTerm, currentSong, setCurrentSong, setIsPlaying, isPlaying, playSong,
   toggleLike, onClear, addToQueue, token, isLoggedIn,
   userPlaylists, onAddToUserPlaylist, isAudioCached, cacheAudio, removeCached,
 }) => {
@@ -201,8 +201,8 @@ const GlobalSearchView = ({
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const handlePlay = (song) => {
-    setCurrentSong(song);
-    setIsPlaying(true);
+    if (playSong) playSong(song);
+    else { setCurrentSong(song); setIsPlaying(true); }
     setOpenMenu(null);
   };
 
