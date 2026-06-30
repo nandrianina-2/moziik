@@ -1,4 +1,5 @@
 export const API = 'https://backend-moozik.vercel.app';
+export const API_UPLOAD = "https://moozik-gft1.onrender.com";
 const API_KEY = import.meta.env.ANTHROPIC_API_KEY;
 export const ANTHROPIC_CONFIG = {
   API_KEY: API_KEY,

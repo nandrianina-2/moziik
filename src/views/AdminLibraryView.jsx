@@ -22,7 +22,7 @@ import {
   Plus, Upload, FileAudio, Link2, Zap,
   Download, Globe, CheckSquare, Square
 } from 'lucide-react';
-import { API } from '../config/api';
+import { API, API_UPLOAD } from '../config/api';
 
 const MOOD_OPTIONS = [
   'Chill','Énergie','Focus','Fête','Nostalgie','Romance',
@@ -248,7 +248,7 @@ const AddSongModal = ({ token, artists, albums, onClose, onAdded }) => {
           }
         });
         xhr.addEventListener('error', () => reject(new Error('Erreur réseau')));
-        xhr.open('POST', `${API}/upload`);
+        xhr.open('POST', `${API_UPLOAD}/upload`);
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.send(fd);
       });

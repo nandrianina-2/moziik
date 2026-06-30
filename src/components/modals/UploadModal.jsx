@@ -3,7 +3,7 @@ import {
   X, Plus, Loader2, Upload, Music, Image, CheckCircle,
   Tag, Mic2, Disc3, Sparkles, Search, AlertCircle, Zap
 } from 'lucide-react';
-import { API } from '../../config/api';
+import { API, API_UPLOAD } from '../../config/api';
 
 // ══════════════════════════════════════════════
 // COMPRESSION IMAGE (Canvas)
@@ -349,7 +349,7 @@ const UploadModal = ({
     try {
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${API}/upload`);
+        xhr.open('POST', `${API_UPLOAD}/upload`);
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
         xhr.upload.onprogress = ev => {
           if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100));
