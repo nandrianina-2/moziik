@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 
-const API = 'https://moozik-gft1.onrender.com';
+const API = 'https://backend-moozik.vercel.app';
 
 // ── helpers ──────────────────────────────────
 const timeAgo = (d) => {

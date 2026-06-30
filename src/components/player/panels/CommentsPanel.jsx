@@ -1,7 +1,7 @@
 import { memo, useState, useEffect } from 'react';
 import { MessageCircle } from 'lucide-react';
 
-const API = 'https://moozik-gft1.onrender.com';
+const API = 'https://backend-moozik.vercel.app';
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 

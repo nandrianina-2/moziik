@@ -6,7 +6,7 @@ import {
   Music, Eye, Radio, Volume2, Sparkles, Mic
 } from 'lucide-react';
 
-// const API = import.meta.env.VITE_API_URL || 'https://moozik-gft1.onrender.com';
+// const API = import.meta.env.VITE_API_URL || 'https://backend-moozik.vercel.app';
 import { API } from '../config/api';
 
 // ════════════════════════════════════════════

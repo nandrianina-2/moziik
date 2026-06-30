@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════
 import { useState, useEffect, useCallback } from 'react';
 
-const API = import.meta.env.VITE_API_URL || 'https://moozik-gft1.onrender.com';
+const API = import.meta.env.VITE_API_URL || 'https://backend-moozik.vercel.app';
 
 export const useSubscription = (token) => {
   const [subscription, setSubscription] = useState(null);

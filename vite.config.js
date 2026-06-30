@@ -125,7 +125,7 @@ export default defineConfig({
     host: true,
     server: {
     headers: {
-      'Content-Security-Policy': "connect-src 'self' https://moozik-gft1.onrender.com"
+      'Content-Security-Policy': "connect-src 'self' https://backend-moozik.vercel.app"
     }
   }
   },

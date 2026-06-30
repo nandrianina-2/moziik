@@ -4,7 +4,7 @@
 // ════════════════════════════════════════════
 import { useState, useEffect, useCallback } from 'react';
 
-const API = 'https://moozik-gft1.onrender.com';
+const API = 'https://backend-moozik.vercel.app';
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);

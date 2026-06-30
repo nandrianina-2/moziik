@@ -11,7 +11,7 @@ import {
   Download, ChevronDown, ChevronUp, Eye, Mail, RefreshCw
 } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || 'https://moozik-gft1.onrender.com';
+const API = import.meta.env.VITE_API_URL || 'https://backend-moozik.vercel.app';
 
 // ── Mini carte monde (SVG + points) ───────────
 const GeoMapMini = ({ data }) => {

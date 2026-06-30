@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'wss://moozik-gft1.onrender.com';
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://backend-moozik.vercel.app';
 
 export function useRealtimeListeners(token, currentSong) {
   const [listeners, setListeners] = useState([]);

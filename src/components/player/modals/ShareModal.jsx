@@ -3,7 +3,7 @@ import { Share2, Link, Copy, Check, ExternalLink } from 'lucide-react';
 import { FaWhatsapp, FaFacebookF } from 'react-icons/fa';
 import { SiX } from 'react-icons/si';
 
-const API = 'https://moozik-gft1.onrender.com';
+const API = 'https://backend-moozik.vercel.app';
 
 /**
  * @param {{

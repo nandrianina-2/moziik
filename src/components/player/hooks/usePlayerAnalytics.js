@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const API = 'https://moozik-gft1.onrender.com';
+const API = 'https://backend-moozik.vercel.app';
 
 /**
  * Envoie des événements de rétention audio par tranches de 5 % de progression.
